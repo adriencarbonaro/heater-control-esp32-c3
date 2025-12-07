@@ -1,0 +1,57 @@
+menu "Heater Control Settings"
+
+# Wifi definitions -------------------------------------------------------------
+
+config HEATER_CONTROL_WIFI_SSID
+    string "WiFi SSID"
+
+config HEATER_CONTROL_WIFI_PASSWORD
+    string "WiFi Password"
+
+# MQTT definitions -------------------------------------------------------------
+
+config HEATER_CONTROL_MQTT_URI
+    string "MQTT Uri (format: mqtt://[USER]:[PASSWORD]@[HOST]:[PORT])"
+
+config HEATER_CONTROL_MQTT_TOPIC
+    string "MQTT topic"
+
+config HEATER_CONTROL_MQTT_MSG_MODE_COMFORT
+    string "MQTT message to indicate comfort mode"
+
+config HEATER_CONTROL_MQTT_MSG_MODE_ECO
+    string "MQTT message to indicate eco mode"
+
+config HEATER_CONTROL_MQTT_MSG_MODE_H_GEL
+    string "MQTT message to indicate h_gel mode"
+
+config HEATER_CONTROL_MQTT_MSG_MODE_STOP
+    string "MQTT message to indicate stop mode"
+
+# GPIO definitions -------------------------------------------------------------
+
+config HEATER_CONTROL_IO1_0
+    int "IO1_0 GPIO pin"
+
+config HEATER_CONTROL_IO1_1
+    int "IO1_1 GPIO pin"
+
+config HEATER_CONTROL_IO2_0
+    int "IO2_0 GPIO pin"
+
+config HEATER_CONTROL_IO2_1
+    int "IO2_1 GPIO pin"
+
+config HEATER_CONTROL_IO3_0
+    int "IO3_0 GPIO pin"
+
+config HEATER_CONTROL_IO3_1
+    int "IO3_1 GPIO pin"
+
+config HEATER_CONTROL_IO4_0
+    int "IO4_0 GPIO pin"
+
+config HEATER_CONTROL_IO4_1
+    int "IO4_1 GPIO pin"
+
+endmenu
