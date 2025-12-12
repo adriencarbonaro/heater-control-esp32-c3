@@ -5,15 +5,22 @@
 #include "freertos/event_groups.h"
 #include "mqtt_client.h"
 
+#define MAX_NB_TOPICS 4
+
 typedef struct {
-    const char* topic;
+    const char* topics[MAX_NB_TOPICS];
     bool is_connected;
 } mqtt_task_data_t;
 
-typedef void (*mqtt_event_listener_cb_t)(void);
+typedef void (*mqtt_event_listener_cb_t)(const char* topic,
+                                         int topic_len,
+                                         const char* msg,
+                                         int msg_len);
 
-void mqtt_subscribe_event(const char* msg, mqtt_event_listener_cb_t callback);
+void mqtt_subscribe_topic(const char* topic);
+void mqtt_subscribe_listener(mqtt_event_listener_cb_t callback);
 
-void mqtt_init(const char* topic, EventGroupHandle_t wifi_event_group);
+void mqtt_init(void);
+void mqtt_start(EventGroupHandle_t wifi_event_group);
 
 #endif /* MQTT_H_ */

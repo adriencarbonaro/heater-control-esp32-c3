@@ -10,23 +10,32 @@ config HEATER_CONTROL_WIFI_PASSWORD
 
 # MQTT definitions -------------------------------------------------------------
 
+config HEATER_CONTROL_MQTT_TOPIC_HEATER_1
+    string "MQTT 1st heater topic name"
+
+config HEATER_CONTROL_MQTT_TOPIC_HEATER_2
+    string "MQTT 2nd heater topic name"
+
+config HEATER_CONTROL_MQTT_TOPIC_HEATER_3
+    string "MQTT 3rd heater topic name"
+
+config HEATER_CONTROL_MQTT_TOPIC_HEATER_4
+    string "MQTT 4th heater topic name"
+
 config HEATER_CONTROL_MQTT_URI
     string "MQTT Uri (format: mqtt://[USER]:[PASSWORD]@[HOST]:[PORT])"
 
-config HEATER_CONTROL_MQTT_TOPIC
-    string "MQTT topic"
-
-config HEATER_CONTROL_MQTT_MSG_MODE_COMFORT
-    string "MQTT message to indicate comfort mode"
+config HEATER_CONTROL_MQTT_MSG_MODE_CONFORT
+    string "MQTT message to indicate mode confort"
 
 config HEATER_CONTROL_MQTT_MSG_MODE_ECO
-    string "MQTT message to indicate eco mode"
+    string "MQTT message to indicate mode eco"
 
 config HEATER_CONTROL_MQTT_MSG_MODE_H_GEL
-    string "MQTT message to indicate h_gel mode"
+    string "MQTT message to indicate mode hors_gel"
 
 config HEATER_CONTROL_MQTT_MSG_MODE_STOP
-    string "MQTT message to indicate stop mode"
+    string "MQTT message to indicate mode stop"
 
 # GPIO definitions -------------------------------------------------------------
 

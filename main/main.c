@@ -19,16 +19,6 @@
 #include "utils/types.h"
 #include "wifi.h"
 
-typedef enum {
-    MODE_COMFORT,
-    MODE_ECO,
-    MODE_H_GEL,
-    MODE_STOP,
-} modes_t;
-
-static const char* modes_str[] = { "Confort", "Eco", "Hors Gel", "Stop" };
-
-static TaskHandle_t main_task_handle = NULL;
 static EventGroupHandle_t s_wifi_event_group;
 
 static const char *TAG = "heater-control";
@@ -47,79 +37,95 @@ static const char *TAG = "heater-control";
 typedef struct { uint32 pin; uint32 level; } io_config_t;
 typedef struct { uint32 mode; const io_config_t config[NB_GPIO]; } io_mode_config_t;
 
-static io_mode_config_t heater_io_config[] =
+typedef enum
 {
-    {
-        MODE_COMFORT,
-        {
-            { IO1_0, LOW },
-            { IO1_1, LOW },
-            { IO2_0, LOW },
-            { IO2_1, LOW },
-            { IO3_0, LOW },
-            { IO3_1, LOW },
-            { IO4_0, LOW },
-            { IO4_1, LOW },
-        }
-    },
-    {
-        MODE_ECO,
-        {
-            { IO1_0, HIGH },
-            { IO1_1, HIGH },
-            { IO2_0, HIGH },
-            { IO2_1, HIGH },
-            { IO3_0, HIGH },
-            { IO3_1, HIGH },
-            { IO4_0, HIGH },
-            { IO4_1, HIGH },
-        }
-    },
-    {
-        MODE_H_GEL,
-        {
-            { IO1_0, LOW  },
-            { IO1_1, HIGH },
-            { IO2_0, LOW  },
-            { IO2_1, HIGH },
-            { IO3_0, LOW  },
-            { IO3_1, HIGH },
-            { IO4_0, LOW  },
-            { IO4_1, HIGH },
-        }
-    },
-    {
-        MODE_STOP,
-        {
-            { IO1_0, HIGH },
-            { IO1_1, LOW  },
-            { IO2_0, HIGH },
-            { IO2_1, LOW  },
-            { IO3_0, HIGH },
-            { IO3_1, LOW  },
-            { IO4_0, HIGH },
-            { IO4_1, LOW  },
-        }
-    },
+    HEATER_1,
+    HEATER_2,
+    HEATER_3,
+    HEATER_4,
+} heater_t;
+
+typedef enum {
+    MODE_CONFORT,
+    MODE_ECO,
+    MODE_H_GEL,
+    MODE_STOP,
+} heater_mode_t;
+
+typedef struct
+{
+    heater_t heater;
+    const char* topic;
+} heater_topic_t;
+
+static const heater_topic_t heaters_topics[] =
+{
+    { HEATER_1, MQTT_TOPIC_HEATER_1 },
+    { HEATER_2, MQTT_TOPIC_HEATER_2 },
+    { HEATER_3, MQTT_TOPIC_HEATER_3 },
+    { HEATER_4, MQTT_TOPIC_HEATER_4 },
 };
 
-static void set_mode_io_levels(const io_config_t* config, uint16 config_len)
+const struct { const char* topic; heater_t heater; } topic_to_heater[] = {
+    { CONFIG_HEATER_CONTROL_MQTT_TOPIC_HEATER_1, HEATER_1 },
+    { CONFIG_HEATER_CONTROL_MQTT_TOPIC_HEATER_2, HEATER_2 },
+    { CONFIG_HEATER_CONTROL_MQTT_TOPIC_HEATER_3, HEATER_3 },
+    { CONFIG_HEATER_CONTROL_MQTT_TOPIC_HEATER_4, HEATER_4 },
+};
+
+const struct { const char* msg; heater_mode_t mode; } msg_to_mode[] = {
+    { CONFIG_HEATER_CONTROL_MQTT_MSG_MODE_CONFORT, MODE_CONFORT },
+    { CONFIG_HEATER_CONTROL_MQTT_MSG_MODE_ECO, MODE_ECO },
+    { CONFIG_HEATER_CONTROL_MQTT_MSG_MODE_H_GEL, MODE_H_GEL },
+    { CONFIG_HEATER_CONTROL_MQTT_MSG_MODE_STOP, MODE_STOP },
+};
+
+typedef struct { heater_mode_t mode; uint32 io_0; uint32 io_1; } a;
+
+static a heater_mode_config[] =
 {
-    for (uint16 i = 0; i < config_len; i++)
-    {
-        gpio_set_level(config[i].pin, config[i].level);
-    }
+    { MODE_CONFORT, LOW,  LOW  },
+    { MODE_H_GEL,   LOW,  HIGH },
+    { MODE_STOP,    HIGH, LOW  },
+    { MODE_ECO,     HIGH, HIGH },
+};
+
+typedef struct { heater_t heater; uint32 io_0; uint32 io_1; } b;
+
+static b ios[] =
+{
+    { HEATER_1, IO1_0, IO1_1 },
+    { HEATER_2, IO2_0, IO2_1 },
+    { HEATER_3, IO3_0, IO3_1 },
+    { HEATER_4, IO4_0, IO4_1 },
+};
+
+static void set_mode_io_levels(uint32 io_0_pin,
+                               uint32 io_0_level,
+                               uint32 io_1_pin,
+                               uint32 io_1_level)
+{
+    gpio_set_level(io_0_pin, io_0_level);
+    gpio_set_level(io_1_pin, io_1_level);
 }
 
-static void set_mode(modes_t mode)
+static void set_mode(heater_t heater, heater_mode_t mode)
 {
-    for (uint16 i = 0; i < ARRAY_DIM(heater_io_config); i++)
+    for (uint16 i = 0; i < ARRAY_DIM(heater_mode_config); i++)
     {
-        io_mode_config_t mode_config = heater_io_config[i];
+        a mode_config = heater_mode_config[i];
         if (mode_config.mode == mode)
         {
-            set_mode_io_levels(mode_config.config,
-                               ARRAY_DIM(mode_config.config));
+            for (uint16 j = 0; j < ARRAY_DIM(ios); j++)
+            {
+                b io_config = ios[j];
+                if (io_config.heater == heater)
+                {
+                    set_mode_io_levels(io_config.io_0, mode_config.io_0,
+                                       io_config.io_1, mode_config.io_1);
+                    return;
+                }
+            }
             return;
         }
     }
@@ -136,61 +142,74 @@ static void gpio_init(void)
     io_conf.pull_up_en = 0;
     gpio_config(&io_conf);
 
-    set_mode(MODE_COMFORT);
+    set_mode(HEATER_1, MODE_STOP);
+    set_mode(HEATER_2, MODE_STOP);
+    set_mode(HEATER_3, MODE_STOP);
+    set_mode(HEATER_4, MODE_STOP);
+}
+
+typedef struct
+{
+    heater_t heater;
+    heater_mode_t mode;
+} heater_event_t;
+
+QueueHandle_t xStructQueue = NULL;
+
+heater_t getHeaterFromTopic(const char* topic, int topic_len)
+{
+    for (uint16 i = 0; i < ARRAY_DIM(topic_to_heater); i++)
+    {
+        if (strncmp(topic, topic_to_heater[i].topic, topic_len) == 0)
+        {
+            return topic_to_heater[i].heater;
+        }
+    }
+    return HEATER_1;
+}
+
+heater_mode_t getModeFromMsg(const char* msg, int msg_len)
+{
+    for (uint16 i = 0; i < ARRAY_DIM(msg_to_mode); i++)
+    {
+        if (strncmp(msg, msg_to_mode[i].msg, msg_len) == 0)
+        {
+            return msg_to_mode[i].mode;
+        }
+    }
+    return MODE_STOP;
 }
 
 void main_task(void *arg)
 {
     while (1)
     {
-        uint32_t mode = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        ESP_LOGI(TAG, "Mode: %s", modes_str[mode]);
-        switch(mode)
+        heater_event_t event = {0};
+
+        if (xStructQueue != NULL)
         {
-            case MODE_COMFORT:
+            if (xQueueReceive(xStructQueue,
+                             &event,
+                             portMAX_DELAY) == pdPASS)
             {
-                set_mode(MODE_COMFORT);
-                break;
+                ESP_LOGI(TAG, "heater=%u, mode=%u", event.heater, event.mode);
+                set_mode(event.heater, event.mode);
             }
-            case MODE_ECO:
-            {
-                set_mode(MODE_ECO);
-                break;
-            }
-            case MODE_H_GEL:
-            {
-                set_mode(MODE_H_GEL);
-                break;
-            }
-            case MODE_STOP:
-            {
-                set_mode(MODE_STOP);
-                break;
-            }
-            default:
-                break;
         }
     }
 }
 
-void on_mode_comfort(void)
+void on_msg(const char* topic,
+            int topic_len,
+            const char* msg,
+            int msg_len)
 {
-    xTaskNotify(main_task_handle, MODE_COMFORT, eSetValueWithOverwrite);
-}
+    heater_event_t event = {0};
 
-void on_mode_eco(void)
-{
-    xTaskNotify(main_task_handle, MODE_ECO, eSetValueWithOverwrite);
-}
+    event.heater = getHeaterFromTopic(topic, topic_len);
+    event.mode = getModeFromMsg(msg, msg_len);
 
-void on_mode_h_gel(void)
-{
-    xTaskNotify(main_task_handle, MODE_H_GEL, eSetValueWithOverwrite);
-}
-
-void on_mode_stop(void)
-{
-    xTaskNotify(main_task_handle, MODE_STOP, eSetValueWithOverwrite);
+    xQueueSend(xStructQueue, (void *)&event, (TickType_t) 0);
 }
 
 void app_main(void)
@@ -200,12 +219,18 @@ void app_main(void)
     s_wifi_event_group = xEventGroupCreate();
     wifi_init(s_wifi_event_group);
 
-    mqtt_init(MQTT_TOPIC, s_wifi_event_group);
+    mqtt_init();
 
-    mqtt_subscribe_event(MQTT_MSG_MODE_COMFORT, on_mode_comfort);
-    mqtt_subscribe_event(MQTT_MSG_MODE_ECO, on_mode_eco);
-    mqtt_subscribe_event(MQTT_MSG_MODE_H_GEL, on_mode_h_gel);
-    mqtt_subscribe_event(MQTT_MSG_MODE_STOP, on_mode_stop);
+    for (uint16 i = 0; i < ARRAY_DIM(heaters_topics); i++)
+    {
+        mqtt_subscribe_topic(heaters_topics[i].topic);
+    }
 
-    xTaskCreate(main_task, "main_task", 4096, NULL, 5, &main_task_handle);
+    mqtt_subscribe_listener(on_msg);
+
+    mqtt_start(s_wifi_event_group);
+
+    xStructQueue = xQueueCreate(10, sizeof(heater_event_t));
+
+    xTaskCreate(main_task, "main_task", 4096, NULL, 5, NULL);
 }
