@@ -80,55 +80,37 @@ const struct { const char* msg; heater_mode_t mode; } msg_to_mode[] = {
     { CONFIG_HEATER_CONTROL_MQTT_MSG_MODE_STOP, MODE_STOP },
 };
 
-typedef struct { heater_mode_t mode; uint32 io_0; uint32 io_1; } a;
+typedef struct {
+    uint32 io0;
+    uint32 io1;
+} mode_io_cfg_t;
 
-static a heater_mode_config[] =
-{
-    { MODE_CONFORT, LOW,  LOW  },
-    { MODE_H_GEL,   LOW,  HIGH },
-    { MODE_STOP,    HIGH, LOW  },
-    { MODE_ECO,     HIGH, HIGH },
+static const mode_io_cfg_t mode_cfg[] = {
+    [MODE_CONFORT] = { LOW,  LOW  },
+    [MODE_ECO]     = { HIGH, HIGH },
+    [MODE_H_GEL]   = { LOW,  HIGH },
+    [MODE_STOP]    = { HIGH, LOW  }
 };
 
-typedef struct { heater_t heater; uint32 io_0; uint32 io_1; } b;
+typedef struct {
+    uint32 io0_pin;
+    uint32 io1_pin;
+} heater_gpio_cfg_t;
 
-static b ios[] =
-{
-    { HEATER_1, IO1_0, IO1_1 },
-    { HEATER_2, IO2_0, IO2_1 },
-    { HEATER_3, IO3_0, IO3_1 },
-    { HEATER_4, IO4_0, IO4_1 },
+static const heater_gpio_cfg_t heater_cfg[] = {
+    [HEATER_1] = { IO1_0, IO1_1 },
+    [HEATER_2] = { IO2_0, IO2_1 },
+    [HEATER_3] = { IO3_0, IO3_1 },
+    [HEATER_4] = { IO4_0, IO4_1 }
 };
-
-static void set_mode_io_levels(uint32 io_0_pin,
-                               uint32 io_0_level,
-                               uint32 io_1_pin,
-                               uint32 io_1_level)
-{
-    gpio_set_level(io_0_pin, io_0_level);
-    gpio_set_level(io_1_pin, io_1_level);
-}
 
 static void set_mode(heater_t heater, heater_mode_t mode)
 {
-    for (uint16 i = 0; i < ARRAY_DIM(heater_mode_config); i++)
-    {
-        a mode_config = heater_mode_config[i];
-        if (mode_config.mode == mode)
-        {
-            for (uint16 j = 0; j < ARRAY_DIM(ios); j++)
-            {
-                b io_config = ios[j];
-                if (io_config.heater == heater)
-                {
-                    set_mode_io_levels(io_config.io_0, mode_config.io_0,
-                                       io_config.io_1, mode_config.io_1);
-                    return;
-                }
-            }
-            return;
-        }
-    }
+    const mode_io_cfg_t *m = &mode_cfg[mode];
+    const heater_gpio_cfg_t *h = &heater_cfg[heater];
+
+    gpio_set_level(h->io0_pin, m->io0);
+    gpio_set_level(h->io1_pin, m->io1);
 }
 
 static void gpio_init(void)
@@ -142,10 +124,9 @@ static void gpio_init(void)
     io_conf.pull_up_en = 0;
     gpio_config(&io_conf);
 
-    set_mode(HEATER_1, MODE_STOP);
-    set_mode(HEATER_2, MODE_STOP);
-    set_mode(HEATER_3, MODE_STOP);
-    set_mode(HEATER_4, MODE_STOP);
+    for (int h = 0; h < ARRAY_DIM(heater_cfg); h++) {
+        set_mode(h, MODE_STOP);
+    }
 }
 
 typedef struct
@@ -156,16 +137,15 @@ typedef struct
 
 QueueHandle_t xStructQueue = NULL;
 
-heater_t getHeaterFromTopic(const char* topic, int topic_len)
+heater_t getHeaterFromTopic(const char* topic, int len)
 {
-    for (uint16 i = 0; i < ARRAY_DIM(topic_to_heater); i++)
+    for (int i = 0; i < ARRAY_DIM(topic_to_heater); i++)
     {
-        if (strncmp(topic, topic_to_heater[i].topic, topic_len) == 0)
-        {
+        const char *t = topic_to_heater[i].topic;
+        if (strlen(t) == len && memcmp(topic, t, len) == 0)
             return topic_to_heater[i].heater;
-        }
     }
-    return HEATER_1;
+    return HEATER_1; // default
 }
 
 heater_mode_t getModeFromMsg(const char* msg, int msg_len)
@@ -182,20 +162,12 @@ heater_mode_t getModeFromMsg(const char* msg, int msg_len)
 
 void main_task(void *arg)
 {
-    while (1)
-    {
-        heater_event_t event = {0};
+    heater_event_t event;
 
-        if (xStructQueue != NULL)
-        {
-            if (xQueueReceive(xStructQueue,
-                             &event,
-                             portMAX_DELAY) == pdPASS)
-            {
-                ESP_LOGI(TAG, "heater=%u, mode=%u", event.heater, event.mode);
-                set_mode(event.heater, event.mode);
-            }
-        }
+    while (xQueueReceive(xStructQueue, &event, portMAX_DELAY) == pdPASS)
+    {
+        ESP_LOGI(TAG, "heater=%u mode=%u", event.heater, event.mode);
+        set_mode(event.heater, event.mode);
     }
 }
 
